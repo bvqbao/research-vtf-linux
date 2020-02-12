@@ -116,6 +116,8 @@
 #define VIRQ_ENOMEM     12 /* G. (DOM0) Low on heap memory       */
 #define VIRQ_XENPMU     13  /* PMC interrupt                                 */
 
+#define VIRQ_VTF_PML	14
+
 /* Architecture-specific VIRQ definitions. */
 #define VIRQ_ARCH_0    16
 #define VIRQ_ARCH_1    17
@@ -551,6 +553,12 @@ struct vcpu_info {
 	struct arch_vcpu_info arch;
 	struct pvclock_vcpu_time_info time;
 }; /* 64 bytes (x86) */
+
+struct vtf_info {
+	uint32_t pml_page_order;
+	uint32_t nr_pml_entries;
+	unsigned long *pml;
+};
 
 /*
  * Xen/kernel shared data -- pointer provided in start_info.

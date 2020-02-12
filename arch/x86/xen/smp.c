@@ -15,9 +15,11 @@ static DEFINE_PER_CPU(struct xen_common_irq, xen_resched_irq) = { .irq = -1 };
 static DEFINE_PER_CPU(struct xen_common_irq, xen_callfunc_irq) = { .irq = -1 };
 static DEFINE_PER_CPU(struct xen_common_irq, xen_callfuncsingle_irq) = { .irq = -1 };
 static DEFINE_PER_CPU(struct xen_common_irq, xen_debug_irq) = { .irq = -1 };
+static DEFINE_PER_CPU(struct xen_common_irq, xen_vtf_pml_irq) = { .irq = -1 };
 
 static irqreturn_t xen_call_function_interrupt(int irq, void *dev_id);
 static irqreturn_t xen_call_function_single_interrupt(int irq, void *dev_id);
+static irqreturn_t xen_vtf_pml_interrupt(int irq, void *dev_id);
 
 /*
  * Reschedule call back.
@@ -50,6 +52,12 @@ void xen_smp_intr_free(unsigned int cpu)
 		kfree(per_cpu(xen_debug_irq, cpu).name);
 		per_cpu(xen_debug_irq, cpu).name = NULL;
 	}
+	if (per_cpu(xen_vtf_pml_irq, cpu).irq >= 0) {
+		unbind_from_irqhandler(per_cpu(xen_vtf_pml_irq, cpu).irq, NULL);
+		per_cpu(xen_vtf_pml_irq, cpu).irq = -1;
+		kfree(per_cpu(xen_vtf_pml_irq, cpu).name);
+		per_cpu(xen_vtf_pml_irq, cpu).name = NULL;
+	}
 	if (per_cpu(xen_callfuncsingle_irq, cpu).irq >= 0) {
 		unbind_from_irqhandler(per_cpu(xen_callfuncsingle_irq, cpu).irq,
 				       NULL);
@@ -62,7 +70,7 @@ void xen_smp_intr_free(unsigned int cpu)
 int xen_smp_intr_init(unsigned int cpu)
 {
 	int rc;
-	char *resched_name, *callfunc_name, *debug_name;
+	char *resched_name, *callfunc_name, *debug_name, *pml_name;
 
 	resched_name = kasprintf(GFP_KERNEL, "resched%d", cpu);
 	rc = bind_ipi_to_irqhandler(XEN_RESCHEDULE_VECTOR,
@@ -96,6 +104,15 @@ int xen_smp_intr_init(unsigned int cpu)
 		goto fail;
 	per_cpu(xen_debug_irq, cpu).irq = rc;
 	per_cpu(xen_debug_irq, cpu).name = debug_name;
+
+	pml_name = kasprintf(GFP_KERNEL, "vtfpml%d", cpu);
+	rc = bind_virq_to_irqhandler(VIRQ_VTF_PML, cpu, xen_vtf_pml_interrupt,
+					IRQF_PERCPU | IRQF_NOBALANCING,
+					pml_name, NULL);
+	if (rc < 0)
+		goto fail;
+	per_cpu(xen_vtf_pml_irq, cpu).irq = rc;
+	per_cpu(xen_vtf_pml_irq, cpu).name = pml_name;
 
 	callfunc_name = kasprintf(GFP_KERNEL, "callfuncsingle%d", cpu);
 	rc = bind_ipi_to_irqhandler(XEN_CALL_FUNCTION_SINGLE_VECTOR,
@@ -279,6 +296,14 @@ static irqreturn_t xen_call_function_single_interrupt(int irq, void *dev_id)
 	generic_smp_call_function_single_interrupt();
 	inc_irq_stat(irq_call_count);
 	irq_exit();
+
+	return IRQ_HANDLED;
+}
+
+static irqreturn_t xen_vtf_pml_interrupt(int irq, void *dev_id)
+{
+	int cpu = smp_processor_id();
+	printk(KERN_INFO "cpu-%d just received a PML interrupt.\n", cpu);
 
 	return IRQ_HANDLED;
 }

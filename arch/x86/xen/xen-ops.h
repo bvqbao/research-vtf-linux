@@ -29,6 +29,7 @@ DECLARE_PER_CPU(unsigned long, xen_current_cr3);
 extern struct start_info *xen_start_info;
 extern struct shared_info xen_dummy_shared_info;
 extern struct shared_info *HYPERVISOR_shared_info;
+extern struct vtf_info VTF_info;
 
 void xen_setup_mfn_list_list(void);
 void xen_build_mfn_list_list(void);

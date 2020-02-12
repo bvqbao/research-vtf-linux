@@ -163,6 +163,8 @@ DEFINE_GUEST_HANDLE_STRUCT(xen_machphys_mapping_t);
 				    */
 #define XENMAPSPACE_dev_mmio     5 /* device mmio region */
 
+#define XENMAPSPACE_pml_shared_info   30
+
 /*
  * Sets the GPFN at which a particular page appears in the specified guest's
  * pseudophysical address space.

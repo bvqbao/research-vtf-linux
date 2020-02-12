@@ -5,13 +5,24 @@
 #include <linux/kexec.h>
 #include <linux/slab.h>
 
+#include <xen/xen.h>
+#include <xen/events.h>
+#include <xen/interface/xen.h>
+#include <xen/interface/version.h>
+#include <xen/interface/physdev.h>
+#include <xen/interface/vcpu.h>
+#include <xen/interface/memory.h>
+#include <xen/interface/nmi.h>
+#include <xen/interface/xen-mca.h>
 #include <xen/features.h>
 #include <xen/page.h>
+#include <xen/hvc-console.h>
+#include <xen/acpi.h>
 
 #include <asm/xen/hypercall.h>
 #include <asm/xen/hypervisor.h>
 #include <asm/cpu.h>
-#include <asm/e820/api.h> 
+#include <asm/e820/api.h>
 
 #include "xen-ops.h"
 #include "smp.h"
@@ -76,6 +87,7 @@ EXPORT_SYMBOL(xen_start_flags);
  * page as soon as fixmap is up and running.
  */
 struct shared_info *HYPERVISOR_shared_info = &xen_dummy_shared_info;
+struct vtf_info VTF_info = { 0U, 0U, NULL };
 
 /*
  * Flag to determine whether vcpu info placement is available on all
@@ -364,3 +376,33 @@ void xen_arch_unregister_cpu(int num)
 }
 EXPORT_SYMBOL(xen_arch_unregister_cpu);
 #endif
+
+static int __init xen_init_vtf_info(void)
+{
+	struct xen_add_to_physmap xatp;
+	void *buff = NULL;
+	unsigned int page_order = 8;
+
+	buff = (void *) __get_free_pages(GFP_KERNEL | __GFP_ZERO, page_order);
+	if (!buff) {
+		pr_err("not enough memory\n");
+		return -ENOMEM;
+	}
+
+	xatp.domid = DOMID_SELF;
+	xatp.idx = 0;
+	xatp.size = (1u << page_order);
+	xatp.space = XENMAPSPACE_pml_shared_info;
+	xatp.gpfn = virt_to_gfn(buff);
+	if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &xatp))
+		BUG();
+
+	VTF_info.pml_page_order = page_order;
+	VTF_info.nr_pml_entries = (1u << page_order) * PAGE_SIZE / sizeof(unsigned long) - 1;
+	VTF_info.pml = (unsigned long* ) buff;
+
+	/* printk(KERN_INFO "xen_init_vtf_info(): VTF_info.pml[0] = %lu\n", VTF_info.pml[0]); */
+
+	return 0;
+}
+early_initcall(xen_init_vtf_info);
