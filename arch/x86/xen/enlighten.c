@@ -401,6 +401,7 @@ static int __init xen_init_vtf_info(void)
 	VTF_info.nr_pml_entries = (1u << page_order) * PAGE_SIZE / sizeof(unsigned long) - 1;
 	VTF_info.pml = (unsigned long* ) buff;
 
+	/* Test shared memory buffer */
 	printk(KERN_INFO "xen_init_vtf_info(): VTF_info.pml[0] = %lu\n", VTF_info.pml[0]);
 
 	return 0;
