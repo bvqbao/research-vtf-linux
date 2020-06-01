@@ -275,6 +275,9 @@ struct rmap_walk_control {
 void rmap_walk(struct page *page, struct rmap_walk_control *rwc);
 void rmap_walk_locked(struct page *page, struct rmap_walk_control *rwc);
 
+extern int pml_pid;
+void rmap_mark_ptes_dirty_anon(struct page *page, int pid);
+
 #else	/* !CONFIG_MMU */
 
 #define anon_vma_init()		do {} while (0)

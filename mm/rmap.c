@@ -72,6 +72,8 @@
 
 #include "internal.h"
 
+int pml_pid = -1;
+
 static struct kmem_cache *anon_vma_cachep;
 static struct kmem_cache *anon_vma_chain_cachep;
 
@@ -1914,6 +1916,56 @@ void rmap_walk_locked(struct page *page, struct rmap_walk_control *rwc)
 		rmap_walk_anon(page, rwc, true);
 	else
 		rmap_walk_file(page, rwc, true);
+}
+
+void rmap_mark_ptes_dirty_anon(struct page *page, int pid)
+{
+	struct anon_vma *anon_vma;
+	pgoff_t pgoff_start, pgoff_end;
+	struct anon_vma_chain *avc;
+
+	if (!PageAnon(page))
+		return;
+
+	anon_vma = page_anon_vma(page);
+	if (!anon_vma)
+		return;
+
+	printk(KERN_INFO "---Found an anon page...\n");
+
+	pgoff_start = page_to_pgoff(page);
+	pgoff_end = pgoff_start + hpage_nr_pages(page) - 1;
+	anon_vma_interval_tree_foreach(avc, &anon_vma->rb_root,
+		pgoff_start, pgoff_end) {
+
+		struct vm_area_struct *vma = avc->vma;
+		struct mm_struct *as = vma->vm_mm;
+		struct task_struct *task = as->owner;
+		unsigned long address = vma_address(page, vma);
+		struct page_vma_mapped_walk pvmw = {
+			.page = page,
+			.vma = vma,
+			.address = address,
+		};
+		pte_t entry;
+
+		printk(KERN_INFO "---Finding PTEs (task->pid = %d, pfn = %lu)...\n",
+				(int)task->pid, page_to_pfn(page));
+
+		if ((int)task->pid != pid)
+			continue;
+
+		while (page_vma_mapped_walk(&pvmw)) {
+			if (!pvmw.pte)
+				continue;
+
+			printk(KERN_INFO "---Marking a pte dirty...\n");
+
+			entry = *(pvmw.pte);
+			pte_mksoft_dirty(entry);
+			/* pte_mkdirty(entry); */
+		}
+	}
 }
 
 #ifdef CONFIG_HUGETLB_PAGE

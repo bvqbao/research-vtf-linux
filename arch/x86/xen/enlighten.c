@@ -381,7 +381,7 @@ static int __init xen_init_vtf_info(void)
 {
 	struct xen_add_to_physmap xatp;
 	void *buff = NULL;
-	unsigned int page_order = 8;
+	unsigned int page_order = 3;
 
 	buff = (void *) __get_free_pages(GFP_KERNEL | __GFP_ZERO, page_order);
 	if (!buff) {
@@ -400,9 +400,6 @@ static int __init xen_init_vtf_info(void)
 	VTF_info.pml_page_order = page_order;
 	VTF_info.nr_pml_entries = (1u << page_order) * PAGE_SIZE / sizeof(unsigned long) - 1;
 	VTF_info.pml = (unsigned long* ) buff;
-
-	/* Test shared memory buffer */
-	printk(KERN_INFO "xen_init_vtf_info(): VTF_info.pml[0] = %lu\n", VTF_info.pml[0]);
 
 	return 0;
 }

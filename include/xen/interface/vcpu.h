@@ -220,4 +220,7 @@ struct vcpu_register_time_memory_area {
 };
 DEFINE_GUEST_HANDLE_STRUCT(vcpu_register_time_memory_area);
 
+#define VCPUOP_vtf_enable_pml       14
+#define VCPUOP_vtf_disable_pml      15
+
 #endif /* __XEN_PUBLIC_VCPU_H__ */

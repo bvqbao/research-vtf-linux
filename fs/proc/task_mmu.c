@@ -19,6 +19,18 @@
 #include <linux/shmem_fs.h>
 #include <linux/uaccess.h>
 #include <linux/pkeys.h>
+#include <linux/rmap.h>
+
+#include <xen/xen.h>
+#include <xen/interface/xen.h>
+#include <xen/interface/vcpu.h>
+#include <xen/interface/memory.h>
+#include <xen/features.h>
+#include <xen/page.h>
+#include <xen/acpi.h>
+
+#include <asm/xen/hypercall.h>
+#include <asm/xen/hypervisor.h>
 
 #include <asm/elf.h>
 #include <asm/tlb.h>
@@ -1143,6 +1155,8 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 		}
 		tlb_gather_mmu(&tlb, mm, 0, -1);
 		if (type == CLEAR_REFS_SOFT_DIRTY) {
+			pml_pid = (int) task->pid;
+
 			for (vma = mm->mmap; vma; vma = vma->vm_next) {
 				if (!(vma->vm_flags & VM_SOFTDIRTY))
 					continue;
@@ -1171,16 +1185,20 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 				}
 				for (vma = mm->mmap; vma; vma = vma->vm_next) {
 					vma->vm_flags &= ~VM_SOFTDIRTY;
-					vma_set_page_prot(vma);
+					/* vma_set_page_prot(vma); */
 				}
 				downgrade_write(&mm->mmap_sem);
 				break;
 			}
-			mmu_notifier_invalidate_range_start(mm, 0, -1);
+			/* mmu_notifier_invalidate_range_start(mm, 0, -1); */
 		}
 		walk_page_range(0, mm->highest_vm_end, &clear_refs_walk);
-		if (type == CLEAR_REFS_SOFT_DIRTY)
-			mmu_notifier_invalidate_range_end(mm, 0, -1);
+		if (type == CLEAR_REFS_SOFT_DIRTY) {
+			/* mmu_notifier_invalidate_range_end(mm, 0, -1); */
+			if (HYPERVISOR_vcpu_op(VCPUOP_vtf_enable_pml, task->cpu, NULL))
+				BUG();
+			printk(KERN_INFO "PML enabled\n");
+		}
 		tlb_finish_mmu(&tlb, 0, -1);
 		up_read(&mm->mmap_sem);
 out_mm:

@@ -4,8 +4,11 @@
 #include <linux/slab.h>
 #include <linux/cpumask.h>
 #include <linux/percpu.h>
+#include <linux/spinlock.h>
 
 #include <xen/events.h>
+
+#include <linux/rmap.h>
 
 #include <xen/hvc-console.h>
 #include "xen-ops.h"
@@ -300,10 +303,43 @@ static irqreturn_t xen_call_function_single_interrupt(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static spinlock_t pml_lock = __SPIN_LOCK_UNLOCKED();
+
 static irqreturn_t xen_vtf_pml_interrupt(int irq, void *dev_id)
 {
+	int i;
+	int pid = pml_pid;
 	int cpu = smp_processor_id();
+	unsigned long num_entries;
+	struct page *page;
+
 	printk(KERN_INFO "cpu-%d just received a PML interrupt.\n", cpu);
+
+	if (!spin_trylock(&pml_lock))
+		return IRQ_HANDLED;
+
+	num_entries = VTF_info.pml[0];
+
+	if (pml_pid > 0 && num_entries >= VTF_info.nr_pml_entries) {
+
+		printk(KERN_INFO "marking PTEs dirty for pid %d\n", pid);
+
+		for (i = 1; i <= VTF_info.pml[0]; i++) {
+
+			if (!pfn_valid(VTF_info.pml[i]))
+				continue;
+
+			printk(KERN_INFO "found a valid PFN %lu\n", VTF_info.pml[i]);
+
+			page = pfn_to_page(VTF_info.pml[i]);
+			rmap_mark_ptes_dirty_anon(page, pid);
+		}
+	}
+
+	if (num_entries >= VTF_info.nr_pml_entries)
+		VTF_info.pml[0] = 0;
+
+	spin_unlock(&pml_lock);
 
 	return IRQ_HANDLED;
 }
